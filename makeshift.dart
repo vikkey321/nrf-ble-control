@@ -25,11 +25,8 @@ class XiaoControlScreen extends StatefulWidget {
 
 class _XiaoControlScreenState extends State<XiaoControlScreen> {
   FlutterBluePlus flutterBlue = FlutterBluePlus();
-  BluetoothDevice? _connectedDevice;
-  BluetoothCharacteristic? _characteristic;
-  bool isConnected = false;
-  String connectionStatus = 'Disconnected';
   List<BluetoothDevice> savedDevices = []; // List to save devices
+  bool isScanning = false;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +40,7 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
           ),
           IconButton(
             icon: Icon(Icons.list),
-            onPressed: () => _showSavedDevices(context), // Navigate to saved devices
+            onPressed: () => _showSavedDevices(context),
           ),
         ],
       ),
@@ -51,11 +48,6 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              'Connection Status: $connectionStatus',
-              style: TextStyle(fontSize: 18),
-            ),
-            SizedBox(height: 20),
             GridView.count(
               shrinkWrap: true,
               crossAxisCount: 2,
@@ -74,7 +66,7 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
 
   Widget _buildControlButton(BuildContext context, String label, IconData icon, String data) {
     return ElevatedButton(
-      onPressed: () => _sendDataToAllSavedDevices(data), // Send data to all saved devices
+      onPressed: savedDevices.isNotEmpty ? () => _sendDataToAllSavedDevices(data) : null,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -85,45 +77,43 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
     );
   }
 
-  void _scanForDevices(BuildContext context) {
+  void _scanForDevices(BuildContext context) async {
+    setState(() {
+      isScanning = true;
+    });
+    await FlutterBluePlus.startScan(timeout: Duration(seconds: 4));
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Select a Device'),
+        title: Text('Select a Device to Save'),
         content: SingleChildScrollView(
-          child: Column(
-            children: [
-              StreamBuilder<List<ScanResult>>(
-                stream: FlutterBluePlus.scanResults,
-                builder: (context, snapshot) {
-                  if (snapshot.hasData) {
-                    List<ScanResult> devices = snapshot.data!;
-                    return Column(
-                      children: devices.map((result) {
-                        return ListTile(
-                          title: Text(result.device.name.isNotEmpty
-                              ? result.device.name
-                              : 'Unnamed device'),
-                          onTap: () {
-                            FlutterBluePlus.stopScan();
-                            _connectToDevice(result.device);
-                            Navigator.of(context).pop();
-                          },
-                          onLongPress: () {
-                            setState(() {
-                              savedDevices.add(result.device); // Save device to the list
-                            });
-                            Navigator.of(context).pop();
-                          },
-                        );
-                      }).toList(),
+          child: StreamBuilder<List<ScanResult>>(
+            stream: FlutterBluePlus.scanResults,
+            builder: (context, snapshot) {
+              if (snapshot.hasData) {
+                List<ScanResult> devices = snapshot.data!;
+                return Column(
+                  children: devices.map((result) {
+                    return ListTile(
+                      title: Text(result.device.name.isNotEmpty
+                          ? result.device.name
+                          : 'Unnamed device'),
+                      onTap: () {
+                        setState(() {
+                          if (!savedDevices.contains(result.device)) {
+                            savedDevices.add(result.device);
+                          }
+                        });
+                        Navigator.of(context).pop();
+                      },
                     );
-                  } else {
-                    return CircularProgressIndicator();
-                  }
-                },
-              ),
-            ],
+                  }).toList(),
+                );
+              } else {
+                return CircularProgressIndicator();
+              }
+            },
           ),
         ),
         actions: [
@@ -135,34 +125,10 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
       ),
     );
 
-    FlutterBluePlus.startScan(timeout: Duration(seconds: 4));
-  }
-
-  void _connectToDevice(BluetoothDevice device) async {
-    await device.connect();
+    FlutterBluePlus.stopScan();
     setState(() {
-      _connectedDevice = device;
-      isConnected = true;
-      connectionStatus = 'Connected to ${device.name}';
+      isScanning = false;
     });
-
-    List<BluetoothService> services = await device.discoverServices();
-    services.forEach((service) {
-      service.characteristics.forEach((characteristic) {
-        _characteristic = characteristic;
-      });
-    });
-  }
-
-  void _sendData(String data) async {
-    if (_characteristic != null) {
-      await _characteristic!.write(data.codeUnits);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Not connected to any device'),
-        backgroundColor: Colors.red,
-      ));
-    }
   }
 
   void _sendDataToAllSavedDevices(String data) async {
@@ -201,10 +167,6 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
                     Navigator.of(context).pop();
                   },
                 ),
-                onTap: () {
-                  _connectToDevice(device);
-                  Navigator.of(context).pop();
-                },
               );
             }).toList(),
           ),
