@@ -2,7 +2,7 @@
 
 // BLE Service
 BLEUart bleuart; // UART over BLE
-
+int time_ = 100;
 void setup() {
   Serial.begin(115200);
   while (!Serial) delay(10); // Wait for Serial to be ready
@@ -10,7 +10,9 @@ void setup() {
   // Initialize Bluefruit
   Bluefruit.begin();
   Bluefruit.setTxPower(4);    // Transmission Power
-  Bluefruit.setName("Xiao_BLE"); // BLE Device Name
+  // Bluefruit.setName("Xiao_BLE"); // BLE Device Name . change this and keep it unique for each device
+    Bluefruit.setName("Xiao_BLE_1"); // BLE Device Name. change this and keep it unique for each device
+
   Bluefruit.Periph.setConnectCallback(connect_callback);
   Bluefruit.Periph.setDisconnectCallback(disconnect_callback);
 
@@ -20,10 +22,22 @@ void setup() {
 
   // Start Advertising
   startAdv();
+    pinMode(LED_BUILTIN, OUTPUT);
+
+  // pinMode(ledRed, OUTPUT);
+  // pinMode(ledGreen, OUTPUT);
+  // pinMode(ledBlue, OUTPUT);
 }
 
 void loop() {
   // No need to put code here, everything is handled in callbacks
+ // Serial.println()
+   digitalWrite(LED_BUILTIN, HIGH);   
+delay(time_);
+   digitalWrite(LED_BUILTIN, LOW);   
+   delay(time_);
+
+
 }
 
 void startAdv(void) {
@@ -41,11 +55,11 @@ void startAdv(void) {
 }
 
 void connect_callback(uint16_t conn_handle) {
-  Serial.println("Connected");
+  // Serial.println("Connected");
 }
 
 void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
-  Serial.println("Disconnected");
+  // Serial.println("Disconnected");
 }
 
 void bleuart_rx_callback(uint16_t conn_handle) {
@@ -56,9 +70,35 @@ void bleuart_rx_callback(uint16_t conn_handle) {
   int length = bleuart.read(packet, sizeof(packet));
 
   // Print received data
-  Serial.print("Received: ");
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)packet[i]);
+  // Serial.print("Received: ");
+  // for (int i = 0; i < length; i++) {
+  //   Serial.print(packet[i]);
+  // }
+  // Serial.println(packet[0]);
+  // String str = (char*)packet;
+
+  // // Serial.println(sizeof(str));
+  // Serial.println(char(packet[0]));
+  if((packet[0]) == 49){
+    // Serial.println("One printed");
+        time_ = 500;
+;
+    
   }
-  Serial.println();
+  else if((packet[0]) == 50){
+    // Serial.println("Two printed");
+    time_ = 1000;
+  }
+  else if((packet[0]) == 51){
+    // Serial.println("Three printed");
+    time_ = 1500;
+  }
+  else if((packet[0]) == 52){
+    Serial.println("Four printed");
+    time_ = 2000;
+  }
+  else{
+    // Serial.println ("Nothing");
+  }
+  // Serial.println();
 }
