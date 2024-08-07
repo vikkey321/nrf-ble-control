@@ -29,6 +29,7 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
   BluetoothCharacteristic? _characteristic;
   bool isConnected = false;
   String connectionStatus = 'Disconnected';
+  List<BluetoothDevice> savedDevices = []; // List to save devices
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +40,10 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
           IconButton(
             icon: Icon(Icons.bluetooth),
             onPressed: () => _scanForDevices(context),
+          ),
+          IconButton(
+            icon: Icon(Icons.list),
+            onPressed: () => _showSavedDevices(context), // Navigate to saved devices
           ),
         ],
       ),
@@ -69,7 +74,7 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
 
   Widget _buildControlButton(BuildContext context, String label, IconData icon, String data) {
     return ElevatedButton(
-      onPressed: isConnected ? () => _sendData(data) : null,
+      onPressed: () => _sendDataToAllSavedDevices(data), // Send data to all saved devices
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -96,12 +101,18 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
                     return Column(
                       children: devices.map((result) {
                         return ListTile(
-                          title: Text(result.device.platformName.isNotEmpty
-                              ? result.device.platformName
+                          title: Text(result.device.name.isNotEmpty
+                              ? result.device.name
                               : 'Unnamed device'),
                           onTap: () {
                             FlutterBluePlus.stopScan();
                             _connectToDevice(result.device);
+                            Navigator.of(context).pop();
+                          },
+                          onLongPress: () {
+                            setState(() {
+                              savedDevices.add(result.device); // Save device to the list
+                            });
                             Navigator.of(context).pop();
                           },
                         );
@@ -123,7 +134,6 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
         ],
       ),
     );
-
 
     FlutterBluePlus.startScan(timeout: Duration(seconds: 4));
   }
@@ -153,5 +163,59 @@ class _XiaoControlScreenState extends State<XiaoControlScreen> {
         backgroundColor: Colors.red,
       ));
     }
+  }
+
+  void _sendDataToAllSavedDevices(String data) async {
+    for (BluetoothDevice device in savedDevices) {
+      try {
+        await device.connect();
+        List<BluetoothService> services = await device.discoverServices();
+        for (var service in services) {
+          for (var characteristic in service.characteristics) {
+            await characteristic.write(data.codeUnits);
+          }
+        }
+        await device.disconnect();
+      } catch (e) {
+        print("Failed to send data to ${device.name}: $e");
+      }
+    }
+  }
+
+  void _showSavedDevices(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Saved Devices'),
+        content: SingleChildScrollView(
+          child: Column(
+            children: savedDevices.map((device) {
+              return ListTile(
+                title: Text(device.name),
+                trailing: IconButton(
+                  icon: Icon(Icons.delete),
+                  onPressed: () {
+                    setState(() {
+                      savedDevices.remove(device); // Remove device from list
+                    });
+                    Navigator.of(context).pop();
+                  },
+                ),
+                onTap: () {
+                  _connectToDevice(device);
+                  Navigator.of(context).pop();
+                },
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 }
